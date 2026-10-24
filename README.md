@@ -8,6 +8,8 @@ The manual workflow renders a PDF from an exact commit of the public `uniq2me` o
 
 Examples: `dora/20261024-full_Catalog-en.pdf` and `nis2/20261024-nis2_Full-el.pdf`.
 
+The build job runs on the repository's Linux x64 self-hosted runner with labels `self-hosted`, `Linux`, and `X64`.
+
 ## Workflow inputs
 
 - `CATALOG_REPOSITORY`: `uniq2me` or `uniq2me-ai`
