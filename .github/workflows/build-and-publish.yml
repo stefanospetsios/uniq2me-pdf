@@ -71,9 +71,21 @@ jobs:
         env:
           CATALOG_REPOSITORY: ${{ inputs.catalog_repository }}
           COMMIT_SHA: ${{ inputs.commit_sha }}
+          UNIQ2ME_TOKEN: ${{ secrets.UNIQ2ME_TOKEN }}
         run: |
-          git clone --filter=blob:none --no-checkout \
-            "https://github.com/stefanospetsios/${CATALOG_REPOSITORY}.git" catalog
+          SOURCE_URL="https://github.com/stefanospetsios/${CATALOG_REPOSITORY}.git"
+          if [[ "$CATALOG_REPOSITORY" == 'uniq2me-ai' ]]; then
+            if [[ -z "$UNIQ2ME_TOKEN" ]]; then
+              echo 'Set the UNIQ2ME_TOKEN Actions secret in uniq2me-pdf to read the private uniq2me-ai repository.' >&2
+              exit 1
+            fi
+            AUTH_HEADER="$(printf 'x-access-token:%s' "$UNIQ2ME_TOKEN" | base64 --wrap=0)"
+            git -c http.extraheader="AUTHORIZATION: basic ${AUTH_HEADER}" \
+              clone --filter=blob:none --no-checkout "$SOURCE_URL" catalog
+            unset AUTH_HEADER
+          else
+            git clone --filter=blob:none --no-checkout "$SOURCE_URL" catalog
+          fi
           git -C catalog checkout --detach "$COMMIT_SHA"
           ACTUAL_SHA="$(git -C catalog rev-parse HEAD)"
           if [[ "$ACTUAL_SHA" != "$COMMIT_SHA" ]]; then

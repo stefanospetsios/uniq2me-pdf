@@ -36,7 +36,7 @@ Generation and publication scripts live in `.github/scripts/`; the workflow is `
 
 In **uniq2me-pdf → Settings → Secrets and variables → Actions**, set repository variables `PDF_NEXUS_URL` (HTTPS Raw repository URL ending in `/repository/<name>/`) and `PDF_NEXUS_USERNAME`, and secret `PDF_NEXUS_TOKEN`. Anonymous Nexus read access must be enabled for public downloads; after upload the workflow downloads the PDF without credentials and verifies its SHA-256.
 
-The source repositories are public, so no source-read token is required. The PDF workflow does not push to either source repository.
+`uniq2me` is cloned without credentials. For private `uniq2me-ai`, add the `UNIQ2ME_TOKEN` repository secret in `uniq2me-pdf`; it must have read-only Contents access to that repository. The workflow uses it only for the source clone and does not push to either catalog repository.
 
 ## Provenance in the PDF
 
