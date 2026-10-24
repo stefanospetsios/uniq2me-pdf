@@ -25,7 +25,7 @@
 \renewcommand{\headrulewidth}{0pt}
 \renewcommand{\footrulewidth}{0.4pt}
 \renewcommand{\footrule}{\hbox to\headwidth{\color{line}\leaders\hrule height \footrulewidth\hfill}}
-\fancyfoot[L]{\sffamily\scriptsize UNIQ2Me \textbullet\ Printable assessment record}
+\fancyfoot[L]{\sffamily\scriptsize UNIQ2Me \textbullet\ \FooterRecord}
 \fancyfoot[R]{\sffamily\scriptsize\RecordType\quad\textbullet\quad\RecordLanguage}
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{4pt}
@@ -37,7 +37,7 @@
 \newcommand{\SectionTitle}[1]{{\sffamily\bfseries\color{ink}\fontsize{10}{12}\selectfont #1}\par\vspace{1mm}}
 \newcommand{\RecordHeader}{%
   \begin{minipage}[t]{0.75\textwidth}
-    {\sffamily\bfseries\color{teal}\fontsize{8}{10}\selectfont UNIQ2Me\quad/\quad CATALOG RECORD}\par
+    {\sffamily\bfseries\color{teal}\fontsize{8}{10}\selectfont UNIQ2Me\quad/\quad \BrandSubtitle}\par
     {\sffamily\bfseries\color{ink}\fontsize{20}{23}\selectfont \EntityTitle}\par
     {\sffamily\color{muted}\fontsize{8}{10}\selectfont \RecordCode\quad\textbullet\quad\Edition}
   \end{minipage}\hfill
@@ -48,10 +48,10 @@
 }
 \newcommand{\SignatureBlock}[6]{%
   \begin{tcolorbox}[height=46mm,boxsep=1.2mm,left=1.4mm,right=1.4mm,top=1.3mm,bottom=1mm]
-    {\sffamily\bfseries\color{teal}\fontsize{8.5}{10}\selectfont SIGNER #1}\par\vspace{1mm}
-    \Label{Name}\par{\sffamily\small #2\par}\vspace{1mm}\hrule\vspace{1mm}
-    {\sffamily\scriptsize\bfseries\color{ink}VALUE}\quad{\sffamily\small 0\;#3\qquad 1\;#4}\par\vspace{1mm}
-    {\sffamily\scriptsize\color{muted}Signature / initials}\par\vspace{6mm}\hrule\par\vspace{1mm}
-    {\sffamily\scriptsize\color{ink}#5}\quad{\sffamily\scriptsize\bfseries MARKED}\hfill{\sffamily\scriptsize\color{muted}Date}\par\vspace{2mm}{\sffamily\small #6}\par\vspace{1mm}\hrule
+    {\sffamily\bfseries\color{teal}\fontsize{8.5}{10}\selectfont \SignerLabel\ #1}\par\vspace{1mm}
+    \Label{\NameLabel}\par{\sffamily\small #2\par}\vspace{1mm}\hrule\vspace{1mm}
+    {\sffamily\scriptsize\bfseries\color{ink}\ValueLabel}\quad{\sffamily\small 0\;#3\qquad 1\;#4}\par\vspace{1mm}
+    {\sffamily\scriptsize\color{muted}\SignatureLabel}\par\vspace{6mm}\hrule\par\vspace{1mm}
+    {\sffamily\scriptsize\color{ink}#5}\quad{\sffamily\scriptsize\bfseries\MarkedLabel}\hfill{\sffamily\scriptsize\color{muted}\DateLabel}\par\vspace{2mm}{\sffamily\small #6}\par\vspace{1mm}\hrule
   \end{tcolorbox}%
 }

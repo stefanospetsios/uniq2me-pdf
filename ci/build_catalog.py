@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
-"""Render a complete 16 × 16 catalog as individual PDFs and one ordered PDF per locale."""
+"""Build one dated full-catalog or mask-selected shortlist PDF."""
 
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
-import os
 import re
-import shutil
 import subprocess
 import sys
-import zipfile
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
+from pypdf import PdfReader, PdfWriter
+
 SFS_IDS = "0123456789ABCDEF"
+TEMPLATES = {"fullCatalog": "full_Catalog", "shortList": "short_List"}
 
 
 def load_json(path: Path) -> dict:
@@ -28,185 +28,166 @@ def load_json(path: Path) -> dict:
     return value
 
 
-def sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for block in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
-
-
-def catalog_records(root: Path, language: str) -> tuple[list[tuple[str, Path]], list[Path]]:
-    json_dir = root / "json" / language
-    sf_dir = root / "repo-sf" / language
-    if not json_dir.is_dir():
-        raise ValueError(f"missing json/{language}/")
-    records: list[tuple[str, Path]] = []
-    sources: list[Path] = []
-    found_sfs = set()
+def full_catalog_records(root: Path, language: str) -> list[tuple[str, Path, Path | None]]:
+    result = []
     for sfs_id in SFS_IDS:
-        sfs_path = json_dir / f"{sfs_id}.json"
+        sfs_path = root / "json" / language / f"{sfs_id}.json"
         if not sfs_path.is_file():
-            raise ValueError(f"missing SFS JSON {sfs_path.relative_to(root)}")
+            raise SystemExit(f"Full catalog requires {sfs_path.relative_to(root)}")
         sfs = load_json(sfs_path)
-        items = sfs.get("set")
-        if not isinstance(items, list):
-            raise ValueError(f"{sfs_path.relative_to(root)} has no set[] list")
-        item_map = {str(item.get("id", "")).upper(): item for item in items if isinstance(item, dict)}
-        if set(item_map) != set(SFS_IDS):
-            raise ValueError(f"{sfs_path.relative_to(root)} must contain one SF position for each 0–F")
-        sources.append(sfs_path)
-        records.append(("sfs", sfs_path))
+        factors = {str(item.get("id", "")).upper(): item for item in sfs.get("set", []) if isinstance(item, dict)}
+        if set(factors) != set(SFS_IDS):
+            raise SystemExit(f"{sfs_path.relative_to(root)} must include all sixteen SF positions 0–F")
+        result.append(("sfs", sfs_path, None))
         for sf_id in SFS_IDS:
-            repo_id = str(item_map[sf_id].get("repoId") or f"{sfs_id}{sf_id}").upper()
+            repo_id = str(factors[sf_id].get("repoId") or f"{sfs_id}{sf_id}").upper()
             if not re.fullmatch(r"[0-9A-F]{4}", repo_id):
-                raise ValueError(f"Invalid repoId {repo_id!r} in {sfs_path.relative_to(root)}")
-            sf_path = sf_dir / f"{repo_id}.json"
+                raise SystemExit(f"Invalid repoId {repo_id!r} in {sfs_path.relative_to(root)}")
+            sf_path = root / "repo-sf" / language / f"{repo_id}.json"
             if not sf_path.is_file():
-                raise ValueError(f"missing SF JSON {sf_path.relative_to(root)}")
+                raise SystemExit(f"Full catalog requires {sf_path.relative_to(root)}")
             sf = load_json(sf_path)
             identity = sf.get("identity") or {}
             if str(identity.get("sfsId", "")).upper() != sfs_id or str(identity.get("sfId", "")).upper() != sf_id:
-                raise ValueError(f"SF identity mismatch in {sf_path.relative_to(root)}")
-            records.append(("sf", sf_path))
-            sources.append(sf_path)
-            found_sfs.add(sf_path)
-    if len(found_sfs) != 256:
-        raise ValueError(f"expected 256 distinct SF files; found {len(found_sfs)}")
-    return records, sources
+                raise SystemExit(f"Position mismatch in {sf_path.relative_to(root)}")
+            result.append(("sf", sf_path, sfs_path))
+    if len(result) != 272:
+        raise SystemExit(f"Expected 16 SFS covers and 256 SF pages, got {len(result)} records")
+    return result
 
 
-def complete_languages(root: Path) -> tuple[list[str], dict[str, str]]:
-    json_root = root / "json"
-    if not json_root.is_dir():
-        raise SystemExit("Catalog checkout has no json/ directory")
-    complete, incomplete = [], {}
-    for directory in sorted(path for path in json_root.iterdir() if path.is_dir()):
-        language = directory.name
-        try:
-            catalog_records(root, language)
-            complete.append(language)
-        except (ValueError, SystemExit) as exc:
-            incomplete[language] = str(exc)
-    return complete, incomplete
+def selected_positions(mask: dict) -> list[tuple[str, str]]:
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "printable-catalog"))
+    from render_shortlist import selected_fields
+    fields = selected_fields(mask.get("selection") or {})
+    return [(sfs_id, sf_id) for sfs_id in SFS_IDS for sf_id in SFS_IDS
+            if int(fields[sfs_id], 16) & (1 << (15 - SFS_IDS.index(sf_id)))]
 
 
-def render_one(renderer: Path, kind: str, source: Path, output: Path, *, language: str,
-               commit: str, edition: str, sfs: Path | None = None) -> None:
+def render_page(renderer: Path, kind: str, source: Path, output: Path, *, language: str,
+                repository: str, commit: str, alias: str, sfs: Path | None = None,
+                context: Path | None = None) -> None:
     command = [sys.executable, str(renderer), kind, str(source), "--language", language,
-               "--commit", commit, "--edition", edition, "--output", str(output)]
+               "--commit", commit, "--edition", alias, "--output", str(output)]
     if sfs:
         command.extend(("--sfs", str(sfs)))
+    if context:
+        command.extend(("--context-json", str(context)))
     result = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     if result.returncode:
-        raise SystemExit(f"Failed to render {source}:\n{result.stdout[-6000:]}")
+        raise SystemExit(f"Rendering {source} failed:\n{result.stdout[-8000:]}")
 
 
-def build_language(root: Path, output_root: Path, language: str, repository: str,
-                   source_ref: str, commit: str, renderer: Path) -> dict:
-    records, sources = catalog_records(root, language)
-    language_dir = output_root / language
-    language_dir.mkdir(parents=True, exist_ok=True)
-    edition = f"{source_ref} · {commit[:12]}"
-    pages: list[Path] = []
-    for kind, source in records:
-        if kind == "sfs":
-            sfs_id = source.stem.upper()
-            target = language_dir / f"sfs-{sfs_id}-cover.pdf"
-            render_one(renderer, "sfs", source, target, language=language,
-                       commit=commit, edition=edition)
-        else:
-            sf = load_json(source)
-            identity = sf["identity"]
-            sfs_id, sf_id = str(identity["sfsId"]).upper(), str(identity["sfId"]).upper()
-            sfs_source = root / "json" / language / f"{sfs_id}.json"
-            target = language_dir / f"sf-{sfs_id}{sf_id}.pdf"
-            render_one(renderer, "sf", source, target, language=language,
-                       commit=commit, edition=edition, sfs=sfs_source)
-        pages.append(target)
+def compile_pdf(root: Path, records: list[tuple[str, Path, Path | None]], *,
+                output: Path, temp_root: Path, language: str, repository: str,
+                commit: str, alias: str, template: str,
+                shortlist_mask: Path | None = None) -> None:
+    renderer_dir = Path(__file__).resolve().parents[1] / "printable-catalog"
+    renderer = renderer_dir / "render.py"
+    page_files = []
+    for index, (kind, source, sfs) in enumerate(records, start=1):
+        page = temp_root / f"page-{index:03}.pdf"
+        render_page(renderer, kind, source, page, language=language, repository=repository,
+                    commit=commit, alias=alias, sfs=sfs, context=shortlist_mask)
+        page_files.append(page)
+    if shortlist_mask:
+        cover = temp_root / "page-000-cover.pdf"
+        command = [sys.executable, str(renderer_dir / "render_shortlist.py"),
+                   "--catalog", str(root), "--mask", str(shortlist_mask), "--language", language,
+                   "--repository", repository, "--commit", commit, "--alias", alias,
+                   "--output", str(cover)]
+        result = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        if result.returncode:
+            raise SystemExit(f"Shortlist cover rendering failed:\n{result.stdout[-8000:]}")
+        page_files.insert(0, cover)
 
-    from pypdf import PdfReader, PdfWriter
-
-    bundle = language_dir / f"catalog-{language}.pdf"
     writer = PdfWriter()
-    for page_pdf in pages:
-        reader = PdfReader(str(page_pdf), strict=True)
+    for pdf in page_files:
+        reader = PdfReader(str(pdf), strict=True)
         if len(reader.pages) != 1:
-            raise SystemExit(f"Expected one A4 page in {page_pdf.name}; found {len(reader.pages)}")
+            raise SystemExit(f"Expected one page in {pdf.name}; got {len(reader.pages)}")
         page = reader.pages[0]
         width, height = float(page.mediabox.width), float(page.mediabox.height)
         if abs(width - 595.28) > 1.0 or abs(height - 841.89) > 1.0:
-            raise SystemExit(f"{page_pdf.name} is not A4: {width:.1f} × {height:.1f} pt")
+            raise SystemExit(f"{pdf.name} is not A4: {width:.1f} × {height:.1f} pt")
         writer.add_page(page)
-    if len(writer.pages) != 272:
-        raise SystemExit(f"Expected 272 pages for {language}; assembled {len(writer.pages)}")
+    expected = 272 if template == "fullCatalog" else len(records) + 1
+    if len(writer.pages) != expected:
+        raise SystemExit(f"Expected {expected} pages for {template}, assembled {len(writer.pages)}")
     writer.add_metadata({
-        "/Title": f"UNIQ2Me catalog · {language} · {source_ref}",
+        "/Title": f"UNIQ2Me {template} · {alias} · {language}",
         "/Author": "UNIQ2Me",
-        "/Subject": f"16 SFS covers and 256 SF records from {repository}@{commit}",
+        "/Subject": f"{repository}@{commit}; template={template}; language={language}",
     })
-    with bundle.open("wb") as stream:
+    with output.open("wb") as stream:
         writer.write(stream)
-
-    page_zip = language_dir / f"individual-pages-{language}.zip"
-    with zipfile.ZipFile(page_zip, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
-        for page_pdf in pages:
-            archive.write(page_pdf, page_pdf.name)
-
-    return {
-        "language": language,
-        "pageCount": 272,
-        "coverCount": 16,
-        "sfCount": 256,
-        "bundle": str(bundle.relative_to(output_root)),
-        "bundleSha256": sha256(bundle),
-        "individualPages": str(page_zip.relative_to(output_root)),
-        "individualPagesSha256": sha256(page_zip),
-        "sourceJsonCount": len(sources),
-    }
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("catalog", type=Path, help="Root of checked-out catalog repository")
+    parser.add_argument("catalog", type=Path)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--repository", required=True)
-    parser.add_argument("--ref", required=True)
+    parser.add_argument("--repository", required=True, help="Public source repository name, without owner")
     parser.add_argument("--commit", required=True)
-    parser.add_argument("--language", default="all", help="all or one complete locale such as en")
+    parser.add_argument("--alias", required=True)
+    parser.add_argument("--template", choices=tuple(TEMPLATES), required=True)
+    parser.add_argument("--language", choices=("en", "el", "fr", "de"), required=True)
+    parser.add_argument("--shortlist-mask", type=Path)
+    parser.add_argument("--date", help="Output date in YYYYMMDD, defaults to current UTC date")
     args = parser.parse_args()
     root = args.catalog.resolve()
-    output = args.output.resolve()
-    renderer = Path(__file__).resolve().parents[1] / "printable-catalog" / "render.py"
-    if not renderer.is_file():
-        raise SystemExit(f"Missing renderer: {renderer}")
-    output.mkdir(parents=True, exist_ok=True)
-    complete, incomplete = complete_languages(root)
-    if args.language.lower() == "all":
-        languages = complete
+    output_root = args.output.resolve()
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", args.alias):
+        raise SystemExit("Catalog alias must be 1–64 letters/numbers/dot/underscore/hyphen")
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", args.repository):
+        raise SystemExit("CATALOG_REPOSITORY must be the repository name, e.g. uniq2me or uniq2me-ai")
+    if not re.fullmatch(r"[0-9a-fA-F]{40,64}", args.commit):
+        raise SystemExit("COMMIT_SHA must be a full 40- or 64-character commit SHA")
+    date_stamp = args.date or datetime.now(timezone.utc).strftime("%Y%m%d")
+    try:
+        datetime.strptime(date_stamp, "%Y%m%d")
+    except ValueError:
+        raise SystemExit("Date must use YYYYMMDD") from None
+    if args.template == "fullCatalog":
+        if args.shortlist_mask:
+            raise SystemExit("Do not set --shortlist-mask for fullCatalog")
+        records = full_catalog_records(root, args.language)
     else:
-        languages = [args.language]
-        if args.language not in complete:
-            reason = incomplete.get(args.language, "locale directory not found")
-            raise SystemExit(f"Requested locale {args.language} is incomplete: {reason}")
-    if not languages:
-        raise SystemExit("No complete 16 × 16 locale is available")
+        if not args.shortlist_mask:
+            raise SystemExit("shortList requires --shortlist-mask pointing to a catalog-bound mask JSON")
+        mask_path = args.shortlist_mask.resolve() if args.shortlist_mask.is_absolute() else (root / args.shortlist_mask).resolve()
+        mask_path.relative_to(root)
+        mask = load_json(mask_path)
+        if mask.get("language") != args.language or (mask.get("catalog") or {}).get("language") != args.language:
+            raise SystemExit(f"Shortlist mask language must match --language {args.language}")
+        positions = selected_positions(mask)
+        if not positions:
+            raise SystemExit("Shortlist mask selects no SF positions")
+        records = []
+        for sfs_id, sf_id in positions:
+            sfs_path = root / "json" / args.language / f"{sfs_id}.json"
+            if not sfs_path.is_file():
+                raise SystemExit(f"Selected SFS JSON missing: {sfs_path.relative_to(root)}")
+            sfs = load_json(sfs_path)
+            factor = next((item for item in sfs.get("set", []) if str(item.get("id", "")).upper() == sf_id), None)
+            if factor is None:
+                raise SystemExit(f"Selected position {sfs_id}/{sf_id} is absent from its SFS JSON")
+            repo_id = str(factor.get("repoId") or f"{sfs_id}{sf_id}").upper()
+            sf_path = root / "repo-sf" / args.language / f"{repo_id}.json"
+            if not sf_path.is_file():
+                raise SystemExit(f"Selected SF JSON missing: {sf_path.relative_to(root)}")
+            records.append(("sf", sf_path, sfs_path))
 
-    built = [build_language(root, output, language, args.repository, args.ref, args.commit, renderer)
-             for language in languages]
-    manifest = {
-        "formatVersion": 1,
-        "repository": args.repository,
-        "sourceRef": args.ref,
-        "sourceCommit": args.commit,
-        "generatedAt": datetime.now(timezone.utc).isoformat(),
-        "languages": built,
-        "skippedIncompleteLocales": incomplete if args.language.lower() == "all" else {},
-        "note": "Pages identify catalog questions and signature fields; they are not an assessment or compliance decision.",
-    }
-    manifest_path = output / "manifest.json"
-    manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    print(json.dumps(manifest, indent=2, ensure_ascii=False))
+    output = output_root / args.alias / f"{date_stamp}-{TEMPLATES[args.template]}-{args.language}.pdf"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="uniq2me-catalog-pdf-") as directory:
+        compile_pdf(root, records, output=output, temp_root=Path(directory), language=args.language,
+                    repository=args.repository, commit=args.commit, alias=args.alias,
+                    template=args.template,
+                    shortlist_mask=(args.shortlist_mask.resolve() if args.shortlist_mask and args.shortlist_mask.is_absolute()
+                                    else (root / args.shortlist_mask).resolve() if args.shortlist_mask else None))
+    print(f"Created {output}")
 
 
 if __name__ == "__main__":

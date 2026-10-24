@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Upload generated catalog PDFs to a Nexus Raw repository and verify public reads."""
+"""Upload the selected PDF to Nexus at its catalog-alias path and verify public access."""
 
 from __future__ import annotations
 
@@ -19,94 +19,86 @@ def fail(message: str) -> None:
     raise SystemExit(message)
 
 
-def auth_header() -> str:
+def configuration() -> tuple[str, str]:
     username = os.environ.get("PDF_NEXUS_USERNAME", "").strip()
     token = os.environ.get("PDF_NEXUS_TOKEN", "")
     if not username or not token:
-        fail("Set PDF_NEXUS_USERNAME and PDF_NEXUS_TOKEN as repository secrets with Nexus deploy permission")
-    return "Basic " + base64.b64encode(f"{username}:{token}".encode()).decode()
-
-
-def base_url() -> str:
+        fail("Set variable PDF_NEXUS_USERNAME and secret PDF_NEXUS_TOKEN for Nexus uploads")
     raw = os.environ.get("PDF_NEXUS_URL", "").strip()
     parsed = urllib.parse.urlparse(raw)
     if parsed.scheme != "https" or not parsed.netloc or parsed.query or parsed.fragment:
         fail("PDF_NEXUS_URL must be an HTTPS Nexus Raw repository URL")
     if not re.search(r"/repository/[A-Za-z0-9._-]+/?$", parsed.path):
         fail("PDF_NEXUS_URL must end with /repository/<raw-repository-name>/")
-    return raw.rstrip("/") + "/"
+    authorization = "Basic " + base64.b64encode(f"{username}:{token}".encode()).decode()
+    return raw.rstrip("/") + "/", authorization
 
 
-def request(url: str, method: str, data: bytes | None = None,
-            content_type: str | None = None, auth: str | None = None):
+def request(url: str, method: str, *, data: bytes | None = None,
+            authorization: str | None = None):
     headers = {"User-Agent": "uniq2me-pdf/1.0"}
-    if auth:
-        headers["Authorization"] = auth
-    if content_type:
-        headers["Content-Type"] = content_type
+    if authorization:
+        headers["Authorization"] = authorization
+    if data is not None:
+        headers["Content-Type"] = "application/pdf"
     last_error = "unknown error"
     for attempt in range(4):
         try:
-            return urllib.request.urlopen(urllib.request.Request(url, data=data, headers=headers, method=method), timeout=120)
+            return urllib.request.urlopen(
+                urllib.request.Request(url, data=data, headers=headers, method=method), timeout=120
+            )
         except urllib.error.HTTPError as exc:
             last_error = f"HTTP {exc.code}"
             if exc.code not in {408, 425, 429, 500, 502, 503, 504}:
                 fail(f"Nexus {method} {url}: {last_error}")
         except (urllib.error.URLError, TimeoutError) as exc:
-            last_error = f"network error ({type(exc.reason).__name__ if isinstance(exc, urllib.error.URLError) else 'timeout'})"
+            reason = type(exc.reason).__name__ if isinstance(exc, urllib.error.URLError) else "timeout"
+            last_error = f"network error ({reason})"
         if attempt < 3:
             time.sleep(2 ** attempt)
     fail(f"Nexus {method} {url} failed after retries: {last_error}")
 
 
-def file_digest(path: Path) -> str:
-    digest = hashlib.sha256()
+def digest_file(path: Path) -> str:
+    result = hashlib.sha256()
     with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            result.update(block)
+    return result.hexdigest()
 
 
 def main() -> None:
-    if len(sys.argv) != 6:
-        fail("Usage: publish_nexus.py OUTPUT_DIR SOURCE_REPOSITORY SOURCE_REF SOURCE_COMMIT PUBLICATION_PREFIX")
+    if len(sys.argv) != 2:
+        fail("Usage: publish_nexus.py OUTPUT_DIRECTORY")
     root = Path(sys.argv[1]).resolve()
-    repository, source_ref, commit, publication_prefix = sys.argv[2:]
-    base = base_url()
-    authorization = auth_header()
-    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
-        fail("Source repository must use owner/repository form, e.g. stefanospetsios/uniq2me-ai")
-    repo_path = repository
-    ref_path = re.sub(r"[^A-Za-z0-9._-]+", "-", source_ref.strip("/")) or "ref"
-    if not re.fullmatch(r"[0-9a-fA-F]{40,64}", commit):
-        fail("Source commit must be a full 40- or 64-character Git SHA")
-    prefix = re.sub(r"[^A-Za-z0-9._-]+", "-", publication_prefix.strip("/")) or "catalog"
-    release_path = "/".join((repo_path, ref_path, commit.lower(), prefix))
-    candidates = sorted(path for path in root.rglob("*") if path.is_file() and path.suffix.lower() in {".pdf", ".zip", ".json"})
-    if not candidates:
-        fail(f"No PDF, ZIP, or JSON publication files found under {root}")
-    for path in candidates:
-        relative = path.relative_to(root).as_posix()
-        encoded_path = "/".join(urllib.parse.quote(segment, safe="-._~") for segment in (release_path + "/" + relative).split("/"))
-        url = base + encoded_path
-        mime = {".pdf": "application/pdf", ".zip": "application/zip", ".json": "application/json"}[path.suffix.lower()]
-        body = path.read_bytes()
-        response = request(url, "PUT", body, mime, authorization)
-        response.close()
-        expected = file_digest(path)
-        print(f"Uploaded {relative} ({len(body)} bytes, sha256 {expected})", flush=True)
-
-        # Ensure anonymous readers can retrieve the published public asset and verify its bytes.
-        public_response = request(url, "GET")
-        actual_hash = hashlib.sha256()
-        count = 0
-        with public_response:
-            for chunk in iter(lambda: public_response.read(1024 * 1024), b""):
-                actual_hash.update(chunk)
-                count += len(chunk)
-        if actual_hash.hexdigest() != expected or count != len(body):
-            fail(f"Public Nexus download verification failed for {relative}")
-        print(f"Public URL: {url}", flush=True)
+    if not root.is_dir():
+        fail(f"Output directory not found: {root}")
+    pdfs = sorted(path for path in root.rglob("*.pdf") if path.is_file())
+    if len(pdfs) != 1:
+        fail(f"Expected exactly one PDF under {root}; found {len(pdfs)}")
+    pdf = pdfs[0]
+    relative = pdf.relative_to(root).as_posix()
+    if len(Path(relative).parts) != 2:
+        fail("PDF output must use <catalog-alias>/<date-template-language>.pdf structure")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}/[0-9]{8}-(full_Catalog|short_List)-[a-z]{2,3}\.pdf", relative):
+        fail(f"Unexpected PDF filename or directory: {relative}")
+    base, authorization = configuration()
+    url = base + "/".join(urllib.parse.quote(segment, safe="-._~") for segment in relative.split("/"))
+    body = pdf.read_bytes()
+    expected = digest_file(pdf)
+    with request(url, "PUT", data=body, authorization=authorization) as response:
+        response.read(1)
+    print(f"Uploaded {relative} ({len(body)} bytes, sha256 {expected})", flush=True)
+    public_response = request(url, "GET")
+    actual = hashlib.sha256()
+    count = 0
+    with public_response:
+        for chunk in iter(lambda: public_response.read(1024 * 1024), b""):
+            actual.update(chunk)
+            count += len(chunk)
+    if actual.hexdigest() != expected or count != len(body):
+        fail("Anonymous Nexus download did not match the uploaded PDF")
+    print(f"Public PDF URL: {url}", flush=True)
 
 
 if __name__ == "__main__":

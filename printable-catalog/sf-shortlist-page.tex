@@ -1,0 +1,59 @@
+\begin{document}
+\RecordHeader
+
+\begin{tcolorbox}[colback=pale,colframe=pale,boxsep=2.2mm]
+  \Label{\ScoringFactorLabel}\hfill{\sffamily\bfseries\color{ink}\SFCode}\par\vspace{1mm}
+  {\sffamily\bfseries\color{ink}\fontsize{12.5}{15}\selectfont \SFTitle}\par\vspace{1mm}
+  {\sffamily\bfseries\fontsize{10}{13}\selectfont \SFQuestion}
+\end{tcolorbox}
+
+\begin{tcolorbox}[colback=pale!55,colframe=line,boxsep=1.8mm]
+  \SectionTitle{\ContextLabel: \ContextTitle}
+  {\sffamily\scriptsize\textbf{\PurposeLabel:} \ContextBrief\quad\textbullet\quad
+   \textbf{\ScopeLabel:} \ContextScope\quad\textbullet\quad
+   \textbf{\EvidencePeriodLabel:} \ContextEvidencePeriod}
+\end{tcolorbox}
+
+\begin{minipage}[t]{0.49\textwidth}
+  \begin{tcolorbox}[height=36mm]
+    \SectionTitle{\AssessmentDetailLabel}
+    {\sffamily\small \SFTechnical}
+  \end{tcolorbox}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}
+  \begin{tcolorbox}[height=36mm]
+    \SectionTitle{\ClarificationReasoningLabel}
+    {\sffamily\scriptsize \SFClarifications}
+  \end{tcolorbox}
+\end{minipage}
+
+\begin{tcolorbox}[height=39mm]
+  \SectionTitle{\CanonicalSolutionLabel}
+  {\sffamily\small \SFApproach}
+\end{tcolorbox}
+
+\begin{minipage}[t]{0.63\textwidth}
+  \begin{tcolorbox}[height=22mm]
+    \SectionTitle{\ReferencesLabel}
+    {\sffamily\scriptsize \SFReferences}
+  \end{tcolorbox}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.34\textwidth}\centering
+  \ifx\QRImage\EmptyValue
+    {\sffamily\scriptsize\color{muted}\NoCatalogURLLabel}
+  \else
+    \includegraphics[height=18mm]{\QRImage}\par\vspace{1mm}
+    {\sffamily\scriptsize\bfseries\color{teal}\href{\DetailURL}{\OpenRecordLabel}}
+  \fi
+\end{minipage}
+
+{\sffamily\fontsize{6.2}{7.5}\selectfont\color{muted}\SourceCommitLabel: \texttt{\RecordCommit}\par
+  \InputFingerprintLabel: \texttt{\RecordDigest}}
+
+{\sffamily\bfseries\color{ink}\small \SignoffLabel}\quad{\sffamily\scriptsize\color{muted}\SignoffInstructionsLabel}
+
+\vspace{1mm}
+\noindent\begin{minipage}[t]{0.32\textwidth}\SignatureBlock{A}{\SignerAName}{\VoteAZero}{\VoteAOne}{\MarkedA}{\SignerADate}\end{minipage}\hfill
+\begin{minipage}[t]{0.32\textwidth}\SignatureBlock{B}{\SignerBName}{\VoteBZero}{\VoteBOne}{\MarkedB}{\SignerBDate}\end{minipage}\hfill
+\begin{minipage}[t]{0.32\textwidth}\SignatureBlock{C}{\SignerCName}{\VoteCZero}{\VoteCOne}{\MarkedC}{\SignerCDate}\end{minipage}
+\end{document}
