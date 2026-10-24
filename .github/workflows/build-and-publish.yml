@@ -82,11 +82,13 @@ jobs:
             AUTH_HEADER="$(printf 'x-access-token:%s' "$UNIQ2ME_TOKEN" | base64 --wrap=0)"
             git -c http.extraheader="AUTHORIZATION: basic ${AUTH_HEADER}" \
               clone --filter=blob:none --no-checkout "$SOURCE_URL" catalog
+            git -C catalog -c http.extraheader="AUTHORIZATION: basic ${AUTH_HEADER}" \
+              checkout --detach "$COMMIT_SHA"
             unset AUTH_HEADER
           else
             git clone --filter=blob:none --no-checkout "$SOURCE_URL" catalog
+            git -C catalog checkout --detach "$COMMIT_SHA"
           fi
-          git -C catalog checkout --detach "$COMMIT_SHA"
           ACTUAL_SHA="$(git -C catalog rev-parse HEAD)"
           if [[ "$ACTUAL_SHA" != "$COMMIT_SHA" ]]; then
             echo "Requested $COMMIT_SHA but checked out $ACTUAL_SHA" >&2
