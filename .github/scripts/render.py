@@ -196,7 +196,7 @@ def base_macros(root: Path, args: argparse.Namespace, kind: str, entity: dict,
         "RecordLanguage": language,
         "DetailURL": detail_url,
         "QRLabel": "OPEN CATALOG RECORD" if detail_url else "NO RELEASE LINK RECORDED",
-        "EntityTitle": entity.get("keyTitle") or entity.get("meta", {}).get("title") or "UNIQ2Me catalog",
+        "EntityTitle": clip(entity.get("keyTitle") or entity.get("meta", {}).get("title") or "UNIQ2Me catalog", 84),
         "EntitySummary": clip(entity.get("keyShortInfo") or entity.get("keyDescription"), 440),
         "EntityDescription": clip(entity.get("keyDescription"), 1100),
         "Keywords": clip(entity.get("keyWords"), 240),
@@ -218,8 +218,8 @@ def base_macros(root: Path, args: argparse.Namespace, kind: str, entity: dict,
         score_text = labels["notScored"] if score is None else str(score)
         clarifications = sf.get("clarificationQuestion") or []
         clarification_text = "\n".join(
-            f"\\textbf{{{tex_escape(item.get('key1') or 'Clarification')}}}\\par "
-            f"{tex_escape(clip(item.get('key2'), 330))}\\par\\medskip"
+            f"\\textbf{{{tex_escape(clip(item.get('key1') or 'Clarification', 70))}}}\\par "
+            f"{tex_escape(clip(item.get('key2'), 250))}\\par\\medskip"
             for item in clarifications[:2] if isinstance(item, dict)
         ) or rf"\textit{{{tex_escape(labels['noClarification'])}}}"
         refs = sf.get("wikiLinks") or []
@@ -236,12 +236,12 @@ def base_macros(root: Path, args: argparse.Namespace, kind: str, entity: dict,
         if not ref_lines:
             ref_lines.append(rf"\textit{{{tex_escape(labels['noReferences'])}}}")
         out += macro("SFCode", f"SFS {safe_id(identity.get('sfsId'), 'SFS ID')}  /  SF {safe_id(identity.get('sfId'), 'SF ID')}  ·  {repo_id}")
-        out += macro("SFTitle", sf.get("meta", {}).get("title") or "Scoring factor")
-        out += macro("SFQuestion", question.get("shortBinaryQuestion") or question.get("plain") or "Question text is missing.")
-        out += macro("SFTechnical", clip(question.get("technical-short"), 420) or labels["noTechnicalQuestion"])
+        out += macro("SFTitle", clip(sf.get("meta", {}).get("title") or "Scoring factor", 100))
+        out += macro("SFQuestion", clip(question.get("shortBinaryQuestion") or question.get("plain") or "Question text is missing.", 440))
+        out += macro("SFTechnical", clip(question.get("technical-short"), 360) or labels["noTechnicalQuestion"])
         out += macro("SFScore", score_text)
         out += raw_macro("SFClarifications", clarification_text)
-        out += macro("SFApproach", clip(sf.get("openSourceApproach"), 900) or labels["noCanonicalSolution"])
+        out += macro("SFApproach", clip(sf.get("openSourceApproach"), 680) or labels["noCanonicalSolution"])
         out += raw_macro("SFReferences", r"\par\medskip ".join(ref_lines))
         out += macro("SFID", identity.get("sfId"))
         out += macro("SFSID", identity.get("sfsId"))
