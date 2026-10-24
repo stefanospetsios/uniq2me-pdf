@@ -1,0 +1,53 @@
+\begin{document}
+\RecordHeader
+
+\begin{tcolorbox}[colback=pale,colframe=pale,boxsep=2.5mm]
+  \Label{SCORING FACTOR}\hfill{\sffamily\bfseries\color{ink}\SFCode}\par\vspace{1mm}
+  {\sffamily\bfseries\color{ink}\fontsize{14}{17}\selectfont \SFTitle}\par\vspace{1mm}
+  {\sffamily\bfseries\fontsize{10.5}{14}\selectfont \SFQuestion}
+\end{tcolorbox}
+
+\begin{minipage}[t]{0.49\textwidth}
+  \begin{tcolorbox}[height=42mm]
+    \SectionTitle{Assessment detail}
+    {\sffamily\small \SFTechnical}
+  \end{tcolorbox}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}
+  \begin{tcolorbox}[height=42mm]
+    \SectionTitle{Clarification and reasoning}
+    {\sffamily\scriptsize \SFClarifications}
+  \end{tcolorbox}
+\end{minipage}
+
+\begin{tcolorbox}[height=49mm]
+  \SectionTitle{Canonical solution / implementation notes}
+  {\sffamily\small \SFApproach}
+\end{tcolorbox}
+
+\begin{minipage}[t]{0.63\textwidth}
+  \begin{tcolorbox}[height=27mm]
+    \SectionTitle{References}
+    {\sffamily\scriptsize \SFReferences}
+  \end{tcolorbox}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.34\textwidth}\centering
+  \ifx\QRImage\EmptyValue
+    {\sffamily\scriptsize\color{muted}No catalog URL in this JSON. Add \texttt{--detail-url} to render a QR code.}
+  \else
+    \includegraphics[height=20mm]{\QRImage}\par\vspace{1mm}
+    {\sffamily\scriptsize\bfseries\color{teal}\href{\DetailURL}{OPEN CATALOG RECORD}}
+  \fi
+\end{minipage}
+
+\vspace{2mm}
+{\sffamily\fontsize{6.5}{8}\selectfont\color{muted}Source commit: \texttt{\RecordCommit}\par Input fingerprint (SHA-256): \texttt{\RecordDigest}}
+
+\vspace{2mm}
+{\sffamily\bfseries\color{ink}\small Sign-off record}\quad{\sffamily\scriptsize\color{muted}Choose one value (0 or 1), complete the signature and date, then tick MARKED.}
+
+\vspace{1mm}
+\noindent\begin{minipage}[t]{0.32\textwidth}\SignatureBlock{A}{\SignerAName}{\VoteAZero}{\VoteAOne}{\MarkedA}{\SignerADate}\end{minipage}\hfill
+\begin{minipage}[t]{0.32\textwidth}\SignatureBlock{B}{\SignerBName}{\VoteBZero}{\VoteBOne}{\MarkedB}{\SignerBDate}\end{minipage}\hfill
+\begin{minipage}[t]{0.32\textwidth}\SignatureBlock{C}{\SignerCName}{\VoteCZero}{\VoteCOne}{\MarkedC}{\SignerCDate}\end{minipage}
+\end{document}

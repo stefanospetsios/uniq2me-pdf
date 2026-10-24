@@ -1,0 +1,76 @@
+name: Build and publish catalog PDFs
+permissions:
+  contents: read
+concurrency:
+  group: uniq2me-pdf-nexus-publication
+  cancel-in-progress: false
+'on':
+  workflow_dispatch:
+    inputs:
+      catalog_ref:
+        description: Source catalog branch, tag, or commit in the configured catalog repository
+        type: string
+        required: true
+        default: dora
+      language:
+        description: all builds every complete 16 × 16 locale; otherwise enter a locale code such as en
+        type: string
+        required: true
+        default: all
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Check out PDF renderer
+        uses: actions/checkout@v4
+
+      - name: Check out catalog source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.PDF_CATALOG_REPOSITORY || 'stefanospetsios/uniq2me-ai' }}
+          ref: ${{ inputs.catalog_ref }}
+          token: ${{ secrets.PDF_CATALOG_READ_TOKEN || github.token }}
+          path: catalog
+          persist-credentials: false
+
+      - name: Record the exact catalog commit
+        id: source
+        run: echo "commit=$(git -C catalog rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install PDF build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes texlive-luatex texlive-latex-extra texlive-fonts-recommended tex-gyre qrencode
+          python -m pip install --disable-pip-version-check 'pypdf>=5,<7'
+
+      - name: Render complete catalog
+        env:
+          CATALOG_REPOSITORY: ${{ vars.PDF_CATALOG_REPOSITORY || 'stefanospetsios/uniq2me-ai' }}
+          CATALOG_REF: ${{ inputs.catalog_ref }}
+          CATALOG_COMMIT: ${{ steps.source.outputs.commit }}
+          LANGUAGE: ${{ inputs.language }}
+        run: |
+          python ci/build_catalog.py catalog \
+            --output dist \
+            --repository "$CATALOG_REPOSITORY" \
+            --ref "$CATALOG_REF" \
+            --commit "$CATALOG_COMMIT" \
+            --language "$LANGUAGE"
+
+      - name: Publish and verify public Nexus assets
+        env:
+          PDF_NEXUS_URL: ${{ vars.PDF_NEXUS_URL }}
+          PDF_NEXUS_USERNAME: ${{ secrets.PDF_NEXUS_USERNAME }}
+          PDF_NEXUS_TOKEN: ${{ secrets.PDF_NEXUS_TOKEN }}
+          CATALOG_REPOSITORY: ${{ vars.PDF_CATALOG_REPOSITORY || 'stefanospetsios/uniq2me-ai' }}
+          CATALOG_REF: ${{ inputs.catalog_ref }}
+          CATALOG_COMMIT: ${{ steps.source.outputs.commit }}
+        run: |
+          python ci/publish_nexus.py dist \
+            "$CATALOG_REPOSITORY" "$CATALOG_REF" "$CATALOG_COMMIT" catalog
