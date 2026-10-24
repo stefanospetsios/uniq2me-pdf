@@ -15,7 +15,9 @@ from pathlib import Path
 from pypdf import PdfReader, PdfWriter
 
 SFS_IDS = "0123456789ABCDEF"
-TEMPLATES = {"fullCatalog": "full_Catalog", "shortList": "short_List"}
+TEMPLATES = {"fullCatalog": "full_Catalog", "shortList": "short_List",
+             "doraShort": "dora_Short", "nis2Full": "nis2_Full"}
+FULL_TEMPLATES = {"fullCatalog", "nis2Full"}
 
 
 def load_json(path: Path) -> dict:
@@ -58,7 +60,7 @@ def full_catalog_records(root: Path, language: str) -> list[tuple[str, Path, Pat
 
 def selected_positions(mask: dict) -> list[tuple[str, str]]:
     import sys
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "printable-catalog"))
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
     from render_shortlist import selected_fields
     fields = selected_fields(mask.get("selection") or {})
     return [(sfs_id, sf_id) for sfs_id in SFS_IDS for sf_id in SFS_IDS
@@ -67,9 +69,10 @@ def selected_positions(mask: dict) -> list[tuple[str, str]]:
 
 def render_page(renderer: Path, kind: str, source: Path, output: Path, *, language: str,
                 repository: str, commit: str, alias: str, sfs: Path | None = None,
-                context: Path | None = None) -> None:
+                context: Path | None = None, template: str) -> None:
     command = [sys.executable, str(renderer), kind, str(source), "--language", language,
-               "--commit", commit, "--edition", alias, "--output", str(output)]
+               "--commit", commit, "--edition", alias, "--output", str(output),
+               "--template", template]
     if sfs:
         command.extend(("--sfs", str(sfs)))
     if context:
@@ -83,20 +86,22 @@ def compile_pdf(root: Path, records: list[tuple[str, Path, Path | None]], *,
                 output: Path, temp_root: Path, language: str, repository: str,
                 commit: str, alias: str, template: str,
                 shortlist_mask: Path | None = None) -> None:
-    renderer_dir = Path(__file__).resolve().parents[1] / "printable-catalog"
+    renderer_dir = Path(__file__).resolve().parent
     renderer = renderer_dir / "render.py"
     page_files = []
     for index, (kind, source, sfs) in enumerate(records, start=1):
+        print(f"Rendering page {index}/{len(records)}: {source.name}", flush=True)
         page = temp_root / f"page-{index:03}.pdf"
         render_page(renderer, kind, source, page, language=language, repository=repository,
-                    commit=commit, alias=alias, sfs=sfs, context=shortlist_mask)
+                    commit=commit, alias=alias, sfs=sfs, context=shortlist_mask, template=template)
         page_files.append(page)
     if shortlist_mask:
+        print("Rendering shortlist context cover", flush=True)
         cover = temp_root / "page-000-cover.pdf"
         command = [sys.executable, str(renderer_dir / "render_shortlist.py"),
                    "--catalog", str(root), "--mask", str(shortlist_mask), "--language", language,
                    "--repository", repository, "--commit", commit, "--alias", alias,
-                   "--output", str(cover)]
+                   "--output", str(cover), "--template", template]
         result = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         if result.returncode:
             raise SystemExit(f"Shortlist cover rendering failed:\n{result.stdout[-8000:]}")
@@ -112,7 +117,7 @@ def compile_pdf(root: Path, records: list[tuple[str, Path, Path | None]], *,
         if abs(width - 595.28) > 1.0 or abs(height - 841.89) > 1.0:
             raise SystemExit(f"{pdf.name} is not A4: {width:.1f} × {height:.1f} pt")
         writer.add_page(page)
-    expected = 272 if template == "fullCatalog" else len(records) + 1
+    expected = 272 if template in FULL_TEMPLATES else len(records) + 1
     if len(writer.pages) != expected:
         raise SystemExit(f"Expected {expected} pages for {template}, assembled {len(writer.pages)}")
     writer.add_metadata({
@@ -149,13 +154,13 @@ def main() -> None:
         datetime.strptime(date_stamp, "%Y%m%d")
     except ValueError:
         raise SystemExit("Date must use YYYYMMDD") from None
-    if args.template == "fullCatalog":
+    if args.template in FULL_TEMPLATES:
         if args.shortlist_mask:
-            raise SystemExit("Do not set --shortlist-mask for fullCatalog")
+            raise SystemExit(f"Do not set --shortlist-mask for {args.template}")
         records = full_catalog_records(root, args.language)
     else:
         if not args.shortlist_mask:
-            raise SystemExit("shortList requires --shortlist-mask pointing to a catalog-bound mask JSON")
+            raise SystemExit(f"{args.template} requires --shortlist-mask pointing to a catalog-bound mask JSON")
         mask_path = args.shortlist_mask.resolve() if args.shortlist_mask.is_absolute() else (root / args.shortlist_mask).resolve()
         mask_path.relative_to(root)
         mask = load_json(mask_path)

@@ -80,7 +80,7 @@ def main() -> None:
     relative = pdf.relative_to(root).as_posix()
     if len(Path(relative).parts) != 2:
         fail("PDF output must use <catalog-alias>/<date-template-language>.pdf structure")
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}/[0-9]{8}-(full_Catalog|short_List)-[a-z]{2,3}\.pdf", relative):
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}/[0-9]{8}-(full_Catalog|short_List|dora_Short|nis2_Full)-[a-z]{2,3}\.pdf", relative):
         fail(f"Unexpected PDF filename or directory: {relative}")
     base, authorization = configuration()
     url = base + "/".join(urllib.parse.quote(segment, safe="-._~") for segment in relative.split("/"))

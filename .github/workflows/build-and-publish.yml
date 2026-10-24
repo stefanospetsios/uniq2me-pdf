@@ -32,6 +32,8 @@ concurrency:
         options:
         - fullCatalog
         - shortList
+        - doraShort
+        - nis2Full
       language:
         description: Language of the catalog content and PDF template labels
         type: choice
@@ -43,7 +45,7 @@ concurrency:
         - fr
         - de
       shortlist_mask:
-        description: Required for shortList; mask JSON path in the selected catalog commit
+        description: Required for shortList and doraShort; mask JSON path in the selected catalog commit
         type: string
         required: false
         default: ''
@@ -110,21 +112,21 @@ jobs:
             --language "$LANGUAGE"
             --date "$(date -u +%Y%m%d)"
           )
-          if [[ "$TEMPLATE" == 'shortList' ]]; then
+          if [[ "$TEMPLATE" == 'shortList' || "$TEMPLATE" == 'doraShort' ]]; then
             if [[ -z "$SHORTLIST_MASK" ]]; then
-              echo 'shortList requires shortlist_mask, e.g. repo-sfs-masks/en/nis2.json' >&2
+              echo "$TEMPLATE requires shortlist_mask, e.g. repo-sfs-masks/en/nis2.json" >&2
               exit 1
             fi
             BUILD_ARGS+=(--shortlist-mask "$SHORTLIST_MASK")
           elif [[ -n "$SHORTLIST_MASK" ]]; then
-            echo 'shortlist_mask is only used by shortList.' >&2
+            echo 'shortlist_mask is only used by shortList and doraShort.' >&2
             exit 1
           fi
-          python ci/build_catalog.py "${BUILD_ARGS[@]}"
+          python .github/scripts/build_catalog.py "${BUILD_ARGS[@]}"
 
       - name: Publish and verify public Nexus asset
         env:
           PDF_NEXUS_URL: ${{ vars.PDF_NEXUS_URL }}
           PDF_NEXUS_USERNAME: ${{ vars.PDF_NEXUS_USERNAME }}
           PDF_NEXUS_TOKEN: ${{ secrets.PDF_NEXUS_TOKEN }}
-        run: python ci/publish_nexus.py dist
+        run: python .github/scripts/publish_nexus.py dist

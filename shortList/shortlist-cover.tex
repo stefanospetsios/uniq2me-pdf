@@ -1,0 +1,53 @@
+\begin{document}
+\RecordHeader
+
+\begin{tcolorbox}[colback=pale,colframe=pale,boxsep=2.3mm]
+  \Label{\ContextLabel}\hfill{\sffamily\bfseries\color{ink}\MaskId}\par\vspace{1mm}
+  {\sffamily\bfseries\color{ink}\fontsize{14}{17}\selectfont \MaskTitle}\par\vspace{1mm}
+  {\sffamily\small \MaskDescription}
+\end{tcolorbox}
+
+\begin{minipage}[t]{0.48\textwidth}
+  \begin{tcolorbox}[height=48mm]
+    \SectionTitle{\PurposeLabel}
+    {\sffamily\small \MaskPurpose}
+  \end{tcolorbox}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.48\textwidth}
+  \begin{tcolorbox}[height=48mm]
+    \SectionTitle{\ScopeLabel}
+    {\sffamily\small \MaskScope}\par\vspace{2mm}
+    \Label{\EvidencePeriodLabel}\par{\sffamily\small \MaskEvidencePeriod}
+  \end{tcolorbox}
+\end{minipage}
+
+\SectionTitle{\SelectedFactorsLabel}\vspace{1mm}
+{\sffamily\scriptsize\color{muted}\SelectionNoteLabel}
+\begin{tcolorbox}[boxsep=1.1mm,left=1.5mm,right=1.5mm,top=1mm,bottom=1mm]
+  {\sffamily\fontsize{7.5}{9}\selectfont
+  \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{0.1\textwidth} >{\raggedright\arraybackslash}p{0.1\textwidth} X >{\raggedright\arraybackslash}p{0.1\textwidth} >{\raggedright\arraybackslash}p{0.1\textwidth} X}
+  \textbf{\SFSMaskLabel} & \textbf{\SFPositionsLabel} & \textbf{\SetNameLabel} & \textbf{\SFSMaskLabel} & \textbf{\SFPositionsLabel} & \textbf{\SetNameLabel}\\[-1mm]
+  \hline
+  \MaskRows
+  \end{tabularx}}
+\end{tcolorbox}
+
+\begin{minipage}[t]{0.69\textwidth}
+  \begin{tcolorbox}[height=25mm]
+    \SectionTitle{\ReferencesLabel}
+    {\sffamily\scriptsize \MaskReferences}
+  \end{tcolorbox}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.28\textwidth}\centering
+  \ifx\QRImage\EmptyValue
+    {\sffamily\scriptsize\color{muted}\NoCatalogURLLabel}
+  \else
+    \includegraphics[height=21mm]{\QRImage}\par\vspace{1mm}
+    {\sffamily\scriptsize\bfseries\color{teal}\href{\DetailURL}{\OpenRecordLabel}}
+  \fi
+\end{minipage}
+
+\vfill
+{\sffamily\fontsize{6.5}{8}\selectfont\color{muted}\SourceCommitLabel: \texttt{\RecordCommit}\par
+  \InputFingerprintLabel: \texttt{\RecordDigest}}
+\end{document}

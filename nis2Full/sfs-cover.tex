@@ -1,0 +1,40 @@
+\begin{document}
+\RecordHeader
+
+\begin{tcolorbox}[colback=pale,colframe=pale,boxsep=2.5mm]
+  \Label{\ScoringFactorSetLabel}\hfill{\sffamily\bfseries\color{ink}\SFSCode}\par\vspace{1mm}
+  {\sffamily\bfseries\color{ink}\fontsize{12}{15}\selectfont \EntitySummary}
+\end{tcolorbox}
+
+\begin{minipage}[t]{0.69\textwidth}
+  \begin{tcolorbox}[height=45mm]
+    \SectionTitle{\PurposeScopeLabel}
+    {\sffamily\small \EntityDescription}
+  \end{tcolorbox}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.28\textwidth}\centering
+  \ifx\QRImage\EmptyValue
+    {\sffamily\scriptsize\color{muted}\NoCatalogURLLabel}\par\vspace{2mm}
+  \else
+    \includegraphics[height=24mm]{\QRImage}\par\vspace{2mm}
+    {\sffamily\scriptsize\bfseries\color{teal}\href{\DetailURL}{\OpenRecordLabel}}\par\vspace{2mm}
+  \fi
+  {\sffamily\scriptsize\color{muted}\KeywordsLabel}\par{\sffamily\scriptsize \Keywords}
+\end{minipage}
+
+\vspace{2mm}
+\SectionTitle{\FactorListLabel}
+{\sffamily\scriptsize\color{muted}\FactorListNoteLabel}\vspace{1mm}
+\begin{tcolorbox}[boxsep=1mm,left=1.4mm,right=1.4mm,top=1.2mm,bottom=1mm]
+  {\sffamily\fontsize{7.2}{8.4}\selectfont
+  \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{0.15\textwidth} X >{\raggedright\arraybackslash}p{0.15\textwidth} X}
+  \textbf{\FactorIdLabel} & \textbf{\QuestionLabel} & \textbf{\FactorIdLabel} & \textbf{\QuestionLabel}\\[-1mm]
+  \hline
+  \SFSFactors
+  \end{tabularx}}
+\end{tcolorbox}
+
+\vfill
+{\sffamily\fontsize{6.5}{8}\selectfont\color{muted}\SourceCommitLabel: \texttt{\RecordCommit}\par \InputFingerprintLabel: \texttt{\RecordDigest}}\par
+{\sffamily\scriptsize\color{muted}\CatalogCoverNoteLabel}
+\end{document}

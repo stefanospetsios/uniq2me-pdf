@@ -13,8 +13,8 @@ import tempfile
 from pathlib import Path
 
 from render import (
-    HERE, SFS_IDS, clip, github_record_url, macro, raw_macro, read_json,
-    source_digest, tex_escape, translated_macros,
+    REPO_ROOT, SFS_IDS, clip, github_record_url, macro, raw_macro, read_json,
+    source_digest, template_dir, tex_escape, translated_macros,
 )
 
 
@@ -56,6 +56,7 @@ def main() -> None:
     parser.add_argument("--commit", required=True)
     parser.add_argument("--alias", required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--template", choices=("shortList", "doraShort"), default="shortList")
     args = parser.parse_args()
     root = args.catalog.resolve()
     mask_path = args.mask.resolve()
@@ -70,7 +71,7 @@ def main() -> None:
     if mask.get("language") != language or (mask.get("catalog") or {}).get("language") != language:
         raise SystemExit(f"Mask language must match selected PDF language {language!r}")
     fields = selected_fields(mask.get("selection") or {})
-    labels = json_labels(language)
+    labels = json_labels(language, args.template)
     factor_positions = [(sfs_id, sf_id) for sfs_id in SFS_IDS for sf_id in SFS_IDS
                         if int(fields[sfs_id], 16) & (1 << (15 - SFS_IDS.index(sf_id)))]
     if not factor_positions:
@@ -104,7 +105,7 @@ def main() -> None:
             raise SystemExit(f"Selected factor identity mismatch in {sf_path.relative_to(root)}")
         source_paths.append(sf_path)
 
-    translated, translations = translated_macros(language)
+    translated, translations = translated_macros(language, args.template)
     out = translated
     detail_url = github_record_url(root, mask_path, args.commit)
     digest = source_digest(*source_paths)
@@ -153,8 +154,9 @@ def main() -> None:
     output = args.output.resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
     tex_path = output.with_suffix(".tex")
-    generated = out + f"\\input{{{(HERE / 'common.tex').as_posix()}}}\n"
-    generated += f"\\input{{{(HERE / 'shortlist-cover.tex').as_posix()}}}\n"
+    selected_template = template_dir(args.template)
+    generated = out + f"\\input{{{(selected_template / 'common.tex').as_posix()}}}\n"
+    generated += f"\\input{{{(selected_template / 'shortlist-cover.tex').as_posix()}}}\n"
     tex_path.write_text(generated, encoding="utf-8")
     if detail_url:
         qrencode = shutil.which("qrencode")
@@ -186,8 +188,8 @@ def main() -> None:
     print(f"Rendered shortlist cover for {len(factor_positions)} factors: {output}")
 
 
-def json_labels(language: str) -> dict:
-    return json.loads((HERE / "labels.json").read_text(encoding="utf-8"))[language]
+def json_labels(language: str, template: str) -> dict:
+    return json.loads((template_dir(template) / "labels.json").read_text(encoding="utf-8"))[language]
 
 
 if __name__ == "__main__":

@@ -16,7 +16,15 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 
-HERE = Path(__file__).resolve().parent
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parents[1]
+TEMPLATE_NAMES = ("fullCatalog", "shortList", "doraShort", "nis2Full")
+
+
+def template_dir(name: str) -> Path:
+    if name not in TEMPLATE_NAMES:
+        raise SystemExit(f"Unknown template {name!r}; choose one of {', '.join(TEMPLATE_NAMES)}")
+    return REPO_ROOT / name
 SFS_IDS = "0123456789ABCDEF"
 
 
@@ -124,8 +132,8 @@ def signer_macros(sf: dict) -> str:
     return out
 
 
-def translated_macros(language: str) -> tuple[str, dict]:
-    labels = json.loads((HERE / "labels.json").read_text(encoding="utf-8"))
+def translated_macros(language: str, template: str) -> tuple[str, dict]:
+    labels = json.loads((template_dir(template) / "labels.json").read_text(encoding="utf-8"))
     if language not in labels:
         raise SystemExit(f"No printable-template translations are available for language {language!r}")
     names = {
@@ -179,7 +187,7 @@ def base_macros(root: Path, args: argparse.Namespace, kind: str, entity: dict,
     digest = source_digest(*source_paths)
     detail_url = record_url(sf or entity, args, root, source_paths[0])
     code = f"{language.upper()} · {commit[:12]}"
-    out, labels = translated_macros(language)
+    out, labels = translated_macros(language, args.template)
     for name, value in {
         "RecordType": kind,
         "RecordCode": code,
@@ -286,6 +294,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--edition", help="Human-readable catalog release label")
     parser.add_argument("--detail-url", help="Preferred stable catalog or release URL for the QR code")
     parser.add_argument("--output", type=Path, help="Output PDF path (default: current directory)")
+    parser.add_argument("--template", choices=TEMPLATE_NAMES, default="fullCatalog")
     parser.add_argument("--no-compile", action="store_true", help="Write the generated .tex without running LuaLaTeX")
     args = parser.parse_args()
     args.json = args.json.resolve()
@@ -314,12 +323,12 @@ def main() -> None:
         context = read_json(context_path) if context_path else None
         if args.context_json:
             source_paths.append(context_path)
-        template = "sf-shortlist-page.tex" if context else "sf-page.tex"
+        template_file = ("sf-shortlist-page.tex" if context else "sf-page.tex")
         macros = base_macros(root, args, "SF", sfs or {}, source_paths,
                              sfs=sfs, sf=data, context=context)
         default_name = f"sf-{sfs_id}{sf_id}.pdf"
     else:
-        template = "sfs-cover.tex"
+        template_file = "sfs-cover.tex"
         for item in data.get("set", []):
             repo_id = item.get("repoId") if isinstance(item, dict) else None
             sf_path = root / "repo-sf" / args.language / f"{repo_id}.json" if repo_id else None
@@ -342,8 +351,9 @@ def main() -> None:
         macros += macro("QRImage", qr_path.name)
     else:
         macros += raw_macro("QRImage", "")
-    tex = HERE / template
-    common = HERE / "common.tex"
+    selected_template = template_dir(args.template)
+    tex = selected_template / template_file
+    common = selected_template / "common.tex"
     generated = macros + "\\input{" + str(common).replace("\\", "/") + "}\n"
     generated += "\\input{" + str(tex).replace("\\", "/") + "}\n"
     tex_path.write_text(generated, encoding="utf-8")
