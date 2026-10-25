@@ -51,7 +51,7 @@ concurrency:
         default: ''
 jobs:
   build-and-publish:
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
       - name: Check out PDF renderer
